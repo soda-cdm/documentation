@@ -10,7 +10,7 @@ KAHU is a project under soda cdm organization which deals with backup and restor
 Data protection is a key aspect for most of the stateful applications. In containerized deployments, due to the nature of applications, this aspect becomes even more important. Backup and restore features can significantly help for the application lifecycle management.
 
 ## Non-Goals
-Replication and failover feature is not considered under this project scope
+Replication and failover feature is not currently considered. May get added to this same project scope in future
 
 ## Assumptions and Constraints
 Features discussed here are only for containerized applications.
@@ -30,10 +30,13 @@ Features discussed here are only for containerized applications.
 * Backup and restore across clusters.
 * Support at Federation level
 * Application aware backup and restore
+* Encryption and compression aspects during backups
 
 #### Storage provider framework support
 * Dynamic integration of any storage providers for metadata or volume
 * Support coexistence of multiple providers during runtime
+* Flexible life cycle management for providers with resistartion/unregistration, active/passive states
+* Integration of providers with more capabilities to realize the offloading of complete backup/restore operations
 
 #### Automation and Orchestration 
 * Scheduled backup
@@ -83,12 +86,21 @@ mechanisms for any provider, services to perform backup/restore of metadata and 
 
 **KAHU Default providers:** Some standard and well known ways of backup/restore can be
  provided by KAHU itself for direct usage. This layer represents a collection of such providers.
+ This incudes NFS/S3 providers etc for metadata backup and csi snapshotter for volume snapshotting which can be developed by kahu community
 
 
 ##  Detailed Design
 ###  Use case View
 #### List of Typical Usecases
-#### Use case context model
+* Kuberenetes cluster or application admin wants to take the backup of all the resources in the cluster
+* Kuberenetes cluster or application admin wants to take the backup of specified applications/resources in the cluster
+* Kuberenetes cluster or application admin wants to simply restore as it is from the created backup
+* Kuberenetes cluster or application admin wants to partly restore or restore specific resources from the created backup
+* Kuberenetes cluster or application admin wants to partly restore or restore specific resources from the created backup
+* Kuberenetes cluster or application admin wants to specify some actions in the form of hooks before and after taking the backup
+* Kuberenetes cluster or application admin wants to specify some actions in the form of hooks before and after performing the restore
+
+#### Use case context model: To be added
 #### Interface model
 **North Bound API Definitions:**
 
@@ -151,9 +163,9 @@ https://github.com/soda-cdm/kahu
 ###### Code Structure
   ![](/kahu/resources/Code_Structure.png)
 
-##### Debug Model  
+##### Debug Model: To be added
 
-##### Build and Package
+##### Build and Package: To be added
 
 
 ##### Deployment
@@ -164,7 +176,7 @@ https://github.com/soda-cdm/kahu
 **Deployment use case 2**: On multi node cluster
   ![](/kahu/resources/Multi_Node_Deployment.png)
 
-##### Execution View
+##### Execution View: To be added
 
 ### Sequence Diagrams
 
@@ -196,5 +208,3 @@ https://github.com/soda-cdm/kahu
   ### Design Alternatives and other notes
   
   
-
-
