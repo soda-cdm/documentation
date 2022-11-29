@@ -1,6 +1,6 @@
 ---
 title: Kahu Deployment Guide
-menuTitle: Kahu Deployment Guide
+menuTitle: Deployment Guide
 description: "Deployment guide for the Kahu (Container Data Backup & Restore) project"
 weight: 20
 disableToc: false

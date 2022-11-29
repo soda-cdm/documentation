@@ -1,6 +1,6 @@
 ---
-title: Kahu - The SODA container data backup and restore project
-menuTitle: Kahu User Guide
+title: Kahu User Guide
+menuTitle: User Guide
 description: "User guide for the Kahu (Container Data Backup & Restore) project"
 weight: 10
 disableToc: false

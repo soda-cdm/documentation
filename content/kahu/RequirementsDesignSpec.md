@@ -1,6 +1,6 @@
 ---
 title: Kahu Requirements & Design
-menuTitle: Kahu Design Doc
+menuTitle: Design Doc
 description: "Requirements and Design for the Kahu (Container Data Backup & Restore) project"
 weight: 30
 disableToc: false
