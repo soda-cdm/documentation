@@ -113,9 +113,9 @@ mechanisms for any provider, services to perform backup/restore of metadata and 
 #### Interface model
 **North Bound API Definitions:**
 
-This contains APIs exposed by KAHU through K8S CRDs
+[This Google Drive folder](https://drive.google.com/drive/folders/1qIt-CaXVqjJtwbfEWnsgMrXhMABiO4FC) contains APIs exposed by KAHU through K8S CRDs
 
-https://drive.google.com/drive/folders/1qIt-CaXVqjJtwbfEWnsgMrXhMABiO4FC
+
   
 **Provider Interfaces:**
 ```go
