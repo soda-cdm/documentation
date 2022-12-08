@@ -1,3 +1,3 @@
-module github.com/anvithks/soda-cdm-docs
+module github.com/soda-cdm/documentation
 
 go 1.17
