@@ -57,14 +57,14 @@ Features discussed here are only for containerized applications.
 ##  Architecture Analysis
 ### High level Architecture
 
-  ![](../resources/Level_0_Arch.png)
+  ![](./resources/Level_0_Arch.png)
   
 * Kahu provides APIs to use its backup restore feature. It has set of core services and storage provider framework
 * The Operation and Management layer sits on top of kahu and makes use of kahu features. Kahu itself provides an O & M layer with certain features and respective services. At the same time, any third party system can have O&M layer to operate on top of Kahu
 * The storage providers represent the pluggable layer to Kahu. Kahu will provide a default set of providers for certain use cases. Any third party can plug its provider to Kahu by implementing kahu provider interfaces
   
 ### Module level Architecture
-  ![](../resources/Level_1_Arch.png)
+  ![](./resources/Level_1_Arch.png)
   
 Key components of the ecosystem are as follows
 #### External Components:
@@ -152,7 +152,7 @@ service MetaBackup {
 
 ###  Data View
 ####  Data Model
-  ![](../resources/Data_Model.png)
+  ![](./resources/Data_Model.png)
 
 ######  Key CRD models:
 
@@ -171,7 +171,7 @@ This project uses below repo to maintain code
 https://github.com/soda-cdm/kahu
 
 ###### Code Structure
-  ![](../resources/Code_Structure.png)
+  ![](./resources/Code_Structure.png)
 
 ##### Debug Model: To be added
 
@@ -181,10 +181,10 @@ https://github.com/soda-cdm/kahu
 ##### Deployment
 
 **Deployment use case 1**: On single node cluster
-  ![](../resources/Single_Node_Deployment.png)
+  ![](./resources/Single_Node_Deployment.png)
 
 **Deployment use case 2**: On multi node cluster
-  ![](../resources/Multi_Node_Deployment.png)
+  ![](./resources/Multi_Node_Deployment.png)
 
 ##### Execution View: To be added
 
@@ -192,27 +192,27 @@ https://github.com/soda-cdm/kahu
 
 **Create backup:**
 
-  ![](../resources/Create_Backup_Sequence.png)
+  ![](./resources/Create_Backup_Sequence.png)
   
   
 **Delete backup:**
 
-  ![](../resources/Delete_Backup_Sequence.png)  
+  ![](./resources/Delete_Backup_Sequence.png)  
   
   
   **Metadata Provider Registration:**
   
-  ![](../resources/Metadata_Provider_Registration_Sequence.png)  
+  ![](./resources/Metadata_Provider_Registration_Sequence.png)  
   
   
   **Volume Provider Registration:**
   
-  ![](../resources/Volume_Provider_Registration_Sequence.png)    
+  ![](./resources/Volume_Provider_Registration_Sequence.png)    
   
   
   **Hooks Execution:**
   
-  ![](../resources/Hooks_Execution_Sequence.png)
+  ![](./resources/Hooks_Execution_Sequence.png)
   
   
   ### Design Alternatives and other notes
