@@ -1,4 +1,12 @@
-# Deployment Guide
+---
+title: Kahu Deployment Guide
+menuTitle: Deployment Guide
+description: "Deployment guide for the Kahu (Container Data Backup & Restore) project"
+weight: 20
+disableToc: false
+tags: ["deployment guide", "kahu", "soda-cdm"] 
+---
+
 Kahu features can be realised through deployment on kubernetes(k8s) cluster. 
 If you do not have a k8s cluster, please refer [kubernetes setup documentation](https://kubernetes.io/docs/setup) to setup one.
 
