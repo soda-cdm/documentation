@@ -42,7 +42,7 @@ kubectl get service -n kahu | grep nfs-server
 ```
 6) Edit nfs-pv.yaml to update NFS-SERVER-IP-ADDR with service ip address obtained in step 5
 
-7) create pv
+7) Create pv
 ```shell
 kubectl apply -f nfs-pv.yaml
 ```  
