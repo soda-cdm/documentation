@@ -10,6 +10,8 @@ tags: ["deployment guide", "kahu", "soda-cdm"]
 Kahu features can be realised through deployment on kubernetes(k8s) cluster. 
 If you do not have a k8s cluster, please refer [kubernetes setup documentation](https://kubernetes.io/docs/setup) to setup one.
 
+Note: Need to install the required things for nfs server on the k8s nodes (Example: sudo apt install nfs-kernel-server on ubuntu)
+
 
 ## Deployment options
 ### Install from source using  deployment yamls : 
@@ -40,21 +42,26 @@ kubectl get service -n kahu | grep nfs-server
 ```
 6) Edit nfs-pv.yaml to update NFS-SERVER-IP-ADDR with service ip address obtained in step 5
 
-7) Create nfs server deployment
+7) Create pv
+```shell
+kubectl apply -f nfs-pv.yaml
+```  
+
+8) Create nfs server deployment
 ```shell
 kubectl apply -f nfs-server-deployment.yaml
 ```  
-8) Create nfs provider deployment
+9) Create nfs provider deployment
 ```shell
 cd ../nfsprovider/
 kubectl apply -f nfs-provider-deployment.yaml 
 ```    
-9) Finally, create kahu controller service to enable backup and restore controlers
+10) Finally, create kahu controller service to enable backup and restore controlers
 ```shell
 cd ../controllers/
 kubectl apply -f backup_restore_controllers.yaml
 ```    
-10) Verify state of kahu microservices after deployment
+11) Verify state of kahu microservices after deployment
 ```shell
 kubectl get pods -n kahu
 ```  
