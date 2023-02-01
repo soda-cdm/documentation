@@ -1,4 +1,4 @@
-# Plugin based data protection framework
+# Data protection plugin framework
 Author(s): [Amit Roushan](https://github.com/AmitRoushan) 
 
 January 2023
@@ -10,30 +10,33 @@ Kubernetes. Currently, Kahu supports different volume backup and backup location
 The framework provides a plugin approach to integrated Volume/BackupLocation driver in runtime itself.
 
 Currently, Volume/BackupLocation drivers are deployed either as “Deployment” or “Statefulset”. 
-The solution works perfectly if the drive uses APIs to connect with respective servers. 
-The approach has limitations
+The solution works perfectly if the drive uses APIs to connect with respective volume/backuploction servers. 
+But at same time the approach has limitations
 - If backup/restore drivers are data movers (like Restic).
 - If volumes are topologically distributed
 - Kubernetes does not support hot mount functionality, So if any Volume backup driver needs “Volume” 
   mount for backup/restore. Current approach will be failure Data protection is a scheduled operation. 
   So running a driver process and waiting for a backup/restore request to process is a waste of memory and CPU cycles.
 
-The document proposes an alternative approach to accept volume backup driver and backup location driver as Pod template
-and schedule a Kubernetes job to process backup/restore request
+The document proposes an alternative approach to accept volume backup driver and backup location driver as plugin
+and schedule a Kubernetes pod to process backup/restore request
+
+The plugin approach also brings in advantages in scenario like:
+- Custom command execution before/after backup/restore
+- Resolve dependencies of CRD resources
 
 ## Goals
-- Define a CRD to accept plugins (Volume driver plugin, Backuplocation plugin)
+- Define a CRD to accept plugins
 - Manage lifecycle of plugins
 - Support topology for plugins
 - Maintain backward compatibility
 
 ## Non-Goals
-   NA
+NA
 
 ## Assumptions and Constraints
 - The proposal only consider data protection for Containerized Application
 - Only accounts Kubernetes as Container orchestration platform
-- The solution are based on “Job” resource supported in Kubernetes
 
 ## Requirement Analysis
 - Support generic Plugin for Backup location driver, Volume backup drivers and Custom execution hooks.
@@ -50,9 +53,15 @@ and schedule a Kubernetes job to process backup/restore request
 ## Architecture Analysis
 ![HighLevelDesign](https://github.com/soda-cdm/kahu/blob/main/docs/design/HighLevelDesign.jpg)
 
-Kahu supports vendor agnostic container data protection on Kubernetes platform. It defines CRDs (Backup/Restore) for accepting backup and restore requests. It also defines a separate set of CRDs (BackupLocation/Providers) for Backup Location and Volume backup drivers registration.  
-Kahu deployment involves core services as pod with “Deployment” and BackupLocation driver and volume backup drives as “Deployment” again. Kahu provides side cars (Metadata/Volume service) which get deployed alongside Backuplocation driver and Volume backup drivers respectively.  
-Once Kahu deployment is done, Users can submit backup/restore requests and provide respective filters to select resources for backup/restore.
+Kahu supports vendor agnostic container data protection on Kubernetes platform. It defines CRDs (Backup/Restore) for 
+accepting backup and restore requests. It also defines a separate set of CRDs (BackupLocation/Providers) for Backup 
+Location and Volume backup drivers registration.  
+Kahu deployment involves core services as pod with “Deployment” and BackupLocation driver and volume backup drives as
+“Deployment” again. Kahu provides side cars (Metadata/Volume service) which get deployed alongside Backuplocation 
+driver and Volume backup drivers respectively.  
+Once Kahu deployment is done, Users can submit backup/restore requests and provide respective filters to select 
+resources for backup/restore.
+
 Please refer [Design Doc](https://github.com/soda-cdm/documentation/blob/main/kahu/design_spec.md) for details
 
 
@@ -105,20 +114,21 @@ The submitted requests are further processed by Backup/restore services in core 
 ## Proposed Architecture
 ![Propos Design](resources/KahuHighLevelDesign-PluginBasedDataProtection.jpg)
 ### High Level Module Architecture
-The proposed design enables the kahu framework to accept new plugins and get them executed based on the backup/restore flows.
-It introduces a new CRD “Plugin”. It enables end users to register different plugins which the framework can accept and execute on different stages of backup and restore. Module “PluginManager”, watches on Plugin CRs and manages metadata information of all plugins. For some special plugins (Metadata Service or Volume Service), It triggers some registered functions like adding Provider CR for respective service. Plugin CRD supports different attributes which helps Plugins to get executed and registered with different capabilities.
+The proposed design enables the kahu framework to accept new plugins and get them executed based on the backup/restore 
+flows. It introduces a new CRD called “Plugin”. The "Plugin" enables end users to register different plugins which the framework can accept and execute on different stages of backup and restore. Module “PluginManager”, watches on Plugin CRs and manages metadata information of all plugins. For some special plugins (Metadata Service or Volume Service), It triggers some registered functions like adding Provider CR for respective service. Plugin CRD supports different attributes which helps Plugins to get executed and registered with different capabilities.
 Plugin manager exposes different interfaces for different sets of Plugins. Currently identified Plugins are
 - Volume backup plugin
 - Backup location plugin
 - CustomPlugin
-  A new module called “Plugin executor” also gets introduced. Plugin executor helps to execute the registered plugin. In the first Phase, Plugin executor only supports kubernetes “Job” for execution.
-  Impact Analysis
-
-
+  
+A new module called “Plugin executor” also gets introduced. Plugin executor helps to execute the registered plugin. In the first Phase, Plugin executor only supports kubernetes “Job” for execution.
+  
+### Impact Analysis
 
 
   
 ## Detailed Design
+
 
 ### Use case View
 //Provide system context and typical use cases to determine the scope and boundaries for the module.
@@ -145,6 +155,75 @@ Plugin manager exposes different interfaces for different sets of Plugins. Curre
 
 ### Data View
 #### Data and Control Data Contexts
+```golang
+package v1beta1
+
+import (
+  metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+  "k8s.io/api/core/v1"
+)
+
+type Plugin struct {
+  metav1.TypeMeta `json:",inline"`
+
+  // +optional
+  metav1.ObjectMeta `json:"metadata,omitempty"`
+
+  // +optional
+  Spec PluginSpec `json:"spec,omitempty"`
+
+  // +optional
+  Status PluginStatus `json:"status,omitempty"`
+}
+
+type PluginStatus struct {
+	// Active status indicate state of the Plugin. 
+	Active bool `json:"active,omitempty"`
+}
+
+// Plugin specifications
+type PluginSpec struct {
+	Template v1.PodTemplateSpec `json:"template,omitempty"`
+	
+	PluginType `json:",inline"`
+	
+	Parameters map[string]string `json:"parameters,omitempty"`
+	
+	Capabilities []PluginTypeCapabilities `json:"capabilities,omitempty"`
+}
+
+type PluginTypeCapabilities string
+
+const (
+	BackupLocationCap PluginTypeCapabilities = "BACKUP_LOCATION"
+	VolumeBackupRestore PluginTypeCapabilities = "VOLUME_BACKUP_RESTORE"
+	CRDResolver PluginTypeCapabilities = "CRD_RESOLVER"
+) 
+
+type PluginType struct {
+	// Backup location plugin 
+	BackupLocation *BackupLocationPluginType `json:"backupLocation,omitempty"`
+	
+	// Volume backup/restore plugin 
+	VolumeService *VolumeServicePluginType `json:"volumeService,omitempty"`
+
+	// custom executor 
+	CustomService *CustomServicePluginType `json:"volumeService,omitempty"`
+}
+
+type BackupLocationPluginType struct {
+	
+}
+
+type VolumeServicePluginType struct {
+
+}
+
+type CustomServicePluginType struct {
+	ApplyTo []v1beta1.ResourceSpec
+}
+
+```
 //Provide the details on data and control data flow
 #### Data Model
 // Data Structures, key points considered, open and alternate points etc…All the data structure to be added here
@@ -156,7 +235,13 @@ Development and Deployment Context
 #### Build & Package
 //How this module is built along with other modules etc…What is the package model
 #### Deployment
-//How to install and deploy the module in the system, hardware resource requirements etc. Any other network or such requirements..like client or http server needed etc…
+
+![DeploymentView](resources/DeploymentView.jpg)
+#### Deployment Steps
+- Cluster admin deploys kahu core services as deployment.
+- Different backup location provider, volume backup provider or custom service execution are registered as "Plugin" with 
+  kahu system.
+
 #### Execution View
 //During the run time, any specific aspects to be considered...like logging to be done for the module etc..It is not functional logs, it is specific to the module maintenance; OR Runtime replication or any such requirements to be considered during the design
 #### Sequence Diagrams
