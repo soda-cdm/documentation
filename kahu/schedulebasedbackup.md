@@ -45,7 +45,7 @@ The submitted requests are further processed by Backup/restore services in core 
 
 
 ## Proposed Architecture for Data Protection Management
-![Propos Design](resources/DataProtectionMgmt-ScheduledBasedBackup.jpg)
+![Proposed Design](resources/DataProtectionMgmt-ScheduleBasedBackup.png)
 ### High Level Module Architecture
 
 The proposed design enables the scheduled based backup and which does not change anything in the exsist kahu-core design but enhances kahu system to support schedule based backups. In future it can be enhanced to support different kinds of schedules such as adaptive scheduling which can be implemented based on other futures such as observability features such as  events etc.
@@ -69,15 +69,19 @@ The Job Management & Schedule approaches can be achieved by
 
 The pros and cons of both the approaches as below
 
-k8s-CronJob
+- k8s-CronJob
+
 	Pros: Better reliability 
-      Cons: 1) Tightly coupled with k8s Cron-job, so any changes in Cron-job of
+      
+   Cons: 1) Tightly coupled with k8s Cron-job, so any changes in Cron-job of
 			 k8s may have impact on our code
 		2)Its Complex
 		3) for small task need to create an image which has to be used Cron-
 			Job & its mgmt also complex
 		4)Need to watch on CronJob
-OpenSource
+
+- OpenSource
+
 	Pros: 1)Full control with us
 		2)Easy to implement & Manage using open source
 		3)Easy to handle/change the required things as code base is small as
@@ -109,12 +113,12 @@ The Backup operation is not completed within the given scheduled time then we be
 #### External Interfaces
 //Provide the details of the interface, type, why ? any limitations or alternates etc…
 
-User Can do the below operations on the Schedule Policy using the kubectl
+- User Can do the below operations on the Schedule Policy using the kubectl
     1. Create the Schedule Policy CRD: Web hook validates the CRD , if validation success the object is created and stored, otherwise the web-hook returns error response
     2. Query the Schedule Policy CRD: k8s-api server returns the queried scheduled policy instance if it exists, otherwise returns empty results.
     3. Delete the Schedule Policy CRD: web-hooks checks for the finalizers , if any finalizers exists return failure otherwise deletes the instance and returns success
     4. Update the Schedule Policy CRD: As web-hooks validates and updates the instance. Schedule service watches on the Schedule Policy so on receiving the updated schedule policy the schedule service updates this policy to all the applied scheduled backup instances which will take effect on the next trigger only.
-User Can do the below operations on the BackupSchedule using the kubectl
+- User Can do the below operations on the BackupSchedule using the kubectl
     1. Create the BackupSchedule CRD: Schedule service validates the CRD , if validation fails returns error response otherwise  continuous the operation
     2. Query the BackupSchedule CRD: k8s-api server returns the queried BackupSchedule instance if it exists, otherwise returns empty results.
     3. Delete the BackupSchedule CRD: Schedule service checks for the instance. If ReclaimPolicy is delete then deletes all the backup objects which are created by the BackupSchduled CRD otherwise deletes the instance and returns success,so its users responsibility to delete the Backup instances which were created by the Backup Schedule in case of Reclaim policy
@@ -144,7 +148,7 @@ The Scheduler service can be deployed as HA deployment similar to the k8s-contro
 // Data Structures, key points considered, open and alternate points etc…All the data structure to be added here
 Development and Deployment Context
 
-The Schedule Policy related CRDs and more granular info as follows
+- The Schedule Policy related CRDs and more granular info as follows
 
 ```golang
 var DaysType map[string]time.Weekday {
@@ -243,6 +247,87 @@ type SchedulePolicyList struct {
 
 ```
 
+- The BackupSchedule related CRDs and more granular info as follows
+
+```golang
+type BackupScheduleSpec  struct {  
+   // optional, name of the SchedulePolicy CR
+   // if empty considered as manual trigger otherwise scheduled based backup will be taken
+   BackupPolicyName string  `json:"backupPolicyName"`  
+   // ReclaimPolicy tells about reclamation of the backup. It can be either delete or retain
+   // +kubebuilder:default= retain
+   // +kubebuilder:validation:Optional
+   ReclaimPolicy ReclaimPolicyType `json:"reclaimPolicy,omitempty"`
+   // Enable tells whether  Scheduled Backup should be started or stopped
+   // +optional
+   // +kubebuilder:default=true
+   // +kubebuilder:validation:Optional
+   Enable bool     `json:"enable,omitempty"`
+   // +kubebuilder:validation:Maximum=5
+   // +kubebuilder:validation:Minimum=1
+   // +kubebuilder:default=3
+   // +kubebuilder:validation:Optional
+   MaxRetriesOnFailure int `json:"maxRetriesOnFailure"`
+ // Optional deadline in seconds for starting the Backup if it  misses   // scheduled time for any reason.
+   // +optional
+   StartingDeadlineSeconds *int64 `json:"startingDeadlineSeconds,omitempty"`
+// Specifies how to treat concurrent executions of a Backup.
+// Valid values are:
+// - "Allow": allows Backups to run concurrently;
+// - "Forbid"(default): forbids concurrent runs, skipping next run if    // previous run hasn't finished yet;
+// - "Replace": cancels currently running job and replaces it with a new // one
+   // +optional
+   ConcurrencyPolicy ConcurrencyPolicy `json:"concurrencyPolicy”`
+   // this Backup spec
+   BackupTemplate BackupSpec `json:"template,omitempty"`
+}
+type ScheduleStatus  string
+type ExecutionStatus string
+const(
+   SchedulePending    ScheduleStatus = "Pending"
+   ScheduleActive     ScheduleStatus = "Active"
+   ScheduleInActive   ScheduleStatus = "InActive"
+   ScheduleFailed     ScheduleStatus = "Failed"
+   ScheduleDeleting   ScheduleStatus = "Deleting"
+   
+   ExecutionSuccess     ExecutionStatus = "Success"
+   ExecutionInProgress  ExecutionStatus = "InProgress"
+   ExecutionFailure     ExecutionStatus = "Failed"
+)
+type StatusInfo struct {
+    BackupName string     `json:"backupName"`
+    ExecStatus ExecutionStatus   `json:"execStatus"`
+    StartTimestamp metav1.Time `json:"lastStartTimestamp"`
+    CompletionTimestamp metav1.Time `json:"lastCompletionTimestamp"`
+}
+type BackupScheduleStatus struct {
+   // latest 10 scheduled backup status is stored
+   RecentStatusInfo [] StatusInfo `json:"recentStatusInfo"`
+   LastBackupName string `json:"lastBackupName"`
+   LastExecutionStatus ExecutionStatus `json:"lastExecutionStatus"`
+   // LastStartTimestamp is defines time when Schedule created the backup 
+   LastStartTimestamp metav1.Time `json:"lastStartTimestamp"`
+   // LastCompletionTimestamp is defines time when backup completed
+   LastCompletionTimestamp metav1.Time `json:"lastCompletionTimestamp"`
+   SchedStatus  ScheduleStatus  `json:"schedStatus"`
+   // the created backup crd status used to identify the completed or not
+   BackupStatus BackupState `json:"backupStatus"`
+}
+type BackupSchedule struct {
+   metav1.TypeMeta `json:",inline"`
+   metav1.ObjectMeta `json:"metadata,omitempty"`
+   Spec  BackupScheduleSpec `json:"spec,omitempty"`
+   Status BackupScheduleStatus `json:"status,omitempty"`
+}
+// BackupScheduleList contains a List of BackupSchedule
+type BackupScheduleList struct {
+   metav1.TypeMeta `json:",inline"`
+   metav1.ObjectMeta `json:"metadata,omitempty"`
+   Items []BackupSchedule `json:"items"`
+}
+
+```
+
 #### Code
 //Provide inputs for code structure, language, any open source code can be reused, coding methods, development env etc
 #### Debug Model
@@ -256,9 +341,10 @@ type SchedulePolicyList struct {
 #### Sequence Diagrams
 //Provide the key control and data flow sequence diagrams here
 
+- Schedule Policy Operations
 ![SchedulePolicy](resources/DataProtectionMgmt_SchedulePolicyOps.jpg)
 
-
+- Schedule Based Backup Creation
 ![BackupSchedule](resources/DataProtectionMgmt-Create_BackupSchedule.jpg)
 
 
