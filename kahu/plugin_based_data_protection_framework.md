@@ -128,7 +128,22 @@ A new module called “Plugin executor” also gets introduced. Plugin executor 
 
   
 ## Detailed Design
+With plugin approach, most of the external components required for data protection workflow gets registered with 
+[Plugin crd](Plugin CRD).
 
+##### Components
+- Plugin manager
+  It is an abstract factory which exposes different interfaces to interact with different Registered plugins.
+  It also encapsulates a controller to manager plugin registrations for different resources. 
+  Additionaly, it also helps to execute with different callbacks required for Plugin registration.
+- Plugin executor
+  It abstracts out complexities required to run a Pod for execution and provide reliable interfaces to interacts with 
+  Plugin manager interfaces. 
+  
+##### Workflow 
+
+- Plugin Registration
+  ![PluginRegistration](resources/KahuDesign-PluginRegistration.jpg)
 
 ### Use case View
 //Provide system context and typical use cases to determine the scope and boundaries for the module.
@@ -155,6 +170,8 @@ A new module called “Plugin executor” also gets introduced. Plugin executor 
 
 ### Data View
 #### Data and Control Data Contexts
+
+##### Plugin CRD
 ```golang
 package v1beta1
 
@@ -195,9 +212,8 @@ type PluginSpec struct {
 type PluginTypeCapabilities string
 
 const (
-	BackupLocationCap PluginTypeCapabilities = "BACKUP_LOCATION"
-	VolumeBackupRestore PluginTypeCapabilities = "VOLUME_BACKUP_RESTORE"
-	CRDResolver PluginTypeCapabilities = "CRD_RESOLVER"
+	VolumeBackupNeedSnapshotCap PluginTypeCapabilities = "VOLUME_BACKUP_NEED_SNAPSHOT"
+	CRDResolver                 PluginTypeCapabilities = "CRD_RESOLVER"
 ) 
 
 type PluginType struct {
@@ -220,8 +236,22 @@ type VolumeServicePluginType struct {
 }
 
 type CustomServicePluginType struct {
-	ApplyTo []v1beta1.ResourceSpec
+	PluginHooks []PluginHook `json:"pluginHooks,omitempty"`
 }
+
+type PluginHook struct {
+	Stage PluginHookStage `json:"stage,omitempty"`
+	Resource ResourceSpec `json:"resource,omitempty"`
+}
+
+type PluginHookStage string 
+
+const (
+	PreBackupHook   PluginHookStage = "PRE_BACKUP_HOOK" 
+	PostBackupHook  PluginHookStage = "POST_BACKUP_HOOK" 
+	PreRestoreHook  PluginHookStage = "PRE_RESTORE_HOOK" 
+	PostRestoreHook PluginHookStage = "POST_RESTORE_HOOK" 
+)
 
 ```
 //Provide the details on data and control data flow
@@ -236,7 +266,7 @@ Development and Deployment Context
 //How this module is built along with other modules etc…What is the package model
 #### Deployment
 
-![DeploymentView](resources/DeploymentView.jpg)
+![DeploymentView](resources/KahuDesign-PluginFramework-DeploymentView.jpg)
 #### Deployment Steps
 - Cluster admin deploys kahu core services as deployment.
 - Different backup location provider, volume backup provider or custom service execution are registered as "Plugin" with 
