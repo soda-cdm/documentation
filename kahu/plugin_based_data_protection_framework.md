@@ -143,6 +143,7 @@ With plugin approach, most of the external components required for data protecti
 ##### Workflow 
 
 - Plugin Registration
+
   ![PluginRegistration](resources/KahuDesign-PluginRegistration.jpg)
 
 ### Use case View
