@@ -128,11 +128,13 @@ Plugin framework is composed of two modules:
   It is an abstract factory which exposes different interfaces to interact with different registered plugins. Here 
   registered plugins can be 
   - An object which does like to perform some action during backup/restore flow.
-    Ex: 
+    
+    Example: 
     - Get dependencies of Pods
     - Update resource 
   - A user registered plugin through Plugin CRs
-    Ex:
+    
+    Example:
     - Backuplocation provider
     - Volume backup provider
   
@@ -176,9 +178,60 @@ With plugin approach, most of the external components required for data protecti
 #### Usecase context model
 //How is the module in the overall conext of the usecase..typically for a usecase flow...how the module needs to behave...a network diagram with module could help
 #### Interface Model
-//What are the interfaces for the Modules needed and the view
+
+- Plugin Manager
+
+```golang
+package plugin
+
+import (
+  "context"
+  
+  "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+  kahuapi "github.com/soda-cdm/kahu/apis/kahu/v1beta1"
+)
+
+type PluginStages string 
+
+const (
+  PreBackup     PluginStages = "PRE_BACKUP"
+  PostBackup    PluginStages = "POST_BACKUP"
+  PreRestore    PluginStages = "PRE_RESTORE"
+  PostRestore   PluginStages = "POST_RESTORE"
+)
+
+type Plugin interface {
+  Run(ctx context.Context, stage PluginStages, resource unstructured.Unstructured) (wait chan struct{}, err error)
+}
+
+type PluginManager interface {
+  GetBackuplocations(ctx context.Context) []string
+  GetBackuplocation(ctx context.Context, backuplocation kahuapi.BackupLocation)
+  GetVolumeService(ctx context.Context, volumeBackuplocation kahuapi.BackupLocation)
+  GetVolumeServices(ctx context.Context) []string
+  GetPlugins(ctx context.Context) []string
+  GetPlugin(ctx context.Context, name string) (Plugin, error)
+  GetPluginsByResource(ctx context.Context, resource unstructured.Unstructured) (Plugin, error)
+}
+```
+
+- Plugin Executor
+
+```golang
+package executor
+
+type Executor interface {
+	
+}
+
+```
+
+
 #### External Interfaces
-//Provide the details of the interface, type, why ? any limitations or alternates etc…
+A new CRD get introduced with the Plugin framework for end user. End user can register with different Plugins with the 
+Kahu framework. These plugin gets executed in different stages of backup/restore.
+Details of [Plugin CRD](#plugin-crd) are available in [Data View](#data-view)
+
 #### End User Context
 //Analysis and design inputs for the end user of the module
 ####Functional Context
