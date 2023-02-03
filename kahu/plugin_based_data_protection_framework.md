@@ -46,6 +46,7 @@ NA
 - Enable topology in Plugin deployment
 - Support parameter configurations during Plugin execution
 - Device a way to fetch and maintain plugin job logs
+- Reduce memory footprint during backup/restore
 - Enable jobs eventing
 - Add garbage collection for plugin jobs
 - Ensure backward compatibility
@@ -167,10 +168,6 @@ With plugin approach, most of the external components required for data protecti
 ### Restore workflow
 
 
-
-
-
-
 ### Use case View
 //Provide system context and typical use cases to determine the scope and boundaries for the module.
 #### List of Typical Usecases
@@ -191,28 +188,43 @@ import (
   kahuapi "github.com/soda-cdm/kahu/apis/kahu/v1beta1"
 )
 
-type PluginStages string 
+type PluginStage string 
 
 const (
-  PreBackup     PluginStages = "PRE_BACKUP"
-  PostBackup    PluginStages = "POST_BACKUP"
-  PreRestore    PluginStages = "PRE_RESTORE"
-  PostRestore   PluginStages = "POST_RESTORE"
+  PreBackup     PluginStage = "PRE_BACKUP"
+  PostBackup    PluginStage = "POST_BACKUP"
+  PreRestore    PluginStage = "PRE_RESTORE"
+  PostRestore   PluginStage = "POST_RESTORE"
 )
 
 type Plugin interface {
-  Run(ctx context.Context, stage PluginStages, resource unstructured.Unstructured) (wait chan struct{}, err error)
+  Run(ctx context.Context, stage PluginStage, resource unstructured.Unstructured) (wait chan struct{}, err error)
 }
 
 type PluginManager interface {
-  GetBackuplocations(ctx context.Context) []string
-  GetBackuplocation(ctx context.Context, backuplocation kahuapi.BackupLocation)
+  GetBackuplocations(ctx context.Context) []BackupResourceService
+  GetBackuplocation(ctx context.Context, backuplocation kahuapi.BackupLocation) BackupResourceService
   GetVolumeService(ctx context.Context, volumeBackuplocation kahuapi.BackupLocation)
   GetVolumeServices(ctx context.Context) []string
   GetPlugins(ctx context.Context) []string
   GetPlugin(ctx context.Context, name string) (Plugin, error)
   GetPluginsByResource(ctx context.Context, resource unstructured.Unstructured) (Plugin, error)
 }
+
+type BackupResourceService interface {
+	Upload(ctx context.Context, resource unstructured.Unstructured) error
+	Download(ctx context.Context, resource unstructured.Unstructured) error
+	ResourceExists(ctx context.Context, resource unstructured.Unstructured) (bool, error)
+	Delete(ctx context.Context, resource unstructured.Unstructured) error
+}
+
+type VolumeService interface {
+    Backup(ctx context.Context, resource []unstructured.Unstructured) (wait chan struct{}, err error)
+    Restore(ctx context.Context, resource []unstructured.Unstructured) (wait chan struct{}, err error)
+}
+
+type RegisterPlugin func(PluginStage, kahuapi.ResourceSpec, Plugin) error 
+
 ```
 
 - Plugin Executor
@@ -220,8 +232,14 @@ type PluginManager interface {
 ```golang
 package executor
 
+import (
+  "context"
+
+  "k8s.io/api/core/v1"
+)
+
 type Executor interface {
-	
+  Run(ctx context.Context, podTemplate v1.PodTemplateSpec) (wait chan struct{}, err error)
 }
 
 ```
@@ -255,6 +273,7 @@ package v1beta1
 import (
   metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
   "k8s.io/api/core/v1"
+  kahuapi "github.com/soda-cdm/kahu/apis/kahu/v1beta1"
 )
 
 type Plugin struct {
@@ -318,7 +337,7 @@ type CustomServicePluginType struct {
 
 type PluginHook struct {
 	Stage PluginHookStage `json:"stage,omitempty"`
-	Resource ResourceSpec `json:"resource,omitempty"`
+	Resource kahuapi.ResourceSpec `json:"resource,omitempty"`
 }
 
 type PluginHookStage string 
