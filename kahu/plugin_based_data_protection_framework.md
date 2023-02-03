@@ -112,39 +112,62 @@ The submitted requests are further processed by Backup/restore services in core 
 
 
 ## Proposed Architecture
+
 ![Propos Design](resources/KahuHighLevelDesign-PluginBasedDataProtection.jpg)
+
 ### High Level Module Architecture
-The proposed design enables the kahu framework to accept new plugins and get them executed based on the backup/restore 
-flows. It introduces a new CRD called “Plugin”. The "Plugin" enables end users to register different plugins which the framework can accept and execute on different stages of backup and restore. Module “PluginManager”, watches on Plugin CRs and manages metadata information of all plugins. For some special plugins (Metadata Service or Volume Service), It triggers some registered functions like adding Provider CR for respective service. Plugin CRD supports different attributes which helps Plugins to get executed and registered with different capabilities.
-Plugin manager exposes different interfaces for different sets of Plugins. Currently identified Plugins are
-- Volume backup plugin
-- Backup location plugin
-- CustomPlugin
+The proposed design enables the kahu framework to adopt Template design pattern in which resources are treated as 
+pluggable entity in different stages of backup/restore workflow. Here proposal introduces a Plugin framework which is 
+responsible to maintain and provide reliable interfaces.It introduces a new CRD called “Plugin”. The "Plugin" enables 
+end users to register different plugins which the framework can accept and execute on different stages of backup and 
+restore.
+Plugin framework is composed of two modules: 
+
+- Plugin manager
   
-A new module called “Plugin executor” also gets introduced. Plugin executor helps to execute the registered plugin. In the first Phase, Plugin executor only supports kubernetes “Job” for execution.
+  It is an abstract factory which exposes different interfaces to interact with different registered plugins. Here 
+  registered plugins can be 
+  - An object which does like to perform some action during backup/restore flow.
+    Ex: 
+    - Get dependencies of Pods
+    - Update resource 
+  - A user registered plugin through Plugin CRs
+    Ex:
+    - Backuplocation provider
+    - Volume backup provider
+  
+  It also encapsulates a controller to watch on Plugin CRs and manages metadata information of all plugins.
+  For some special plugins (Metadata Service or Volume Service), It triggers some callbacks like adding 
+  Provider CR for respective service. Plugin CRD supports different attributes which helps Plugins to get 
+  executed and registered with different capabilities.
+  Currently identified Plugins are
+  - Volume service provider plugin
+  - Backup location provider plugin
+  - Custom plugin
+  
+- Plugin executor
+  
+  It abstracts out complexities required to run a plugin as Pod/object for execution and provide reliable interfaces to 
+  interacts with Plugin manager interfaces.
   
 ### Impact Analysis
+- Upgrade 
+- Performance 
+- Maintenance 
 
-
-  
 ## Detailed Design
 With plugin approach, most of the external components required for data protection workflow gets registered with 
-[Plugin crd](Plugin CRD).
+[Plugin CRD](#plugin-crd).
 
-##### Components
-- Plugin manager
-  It is an abstract factory which exposes different interfaces to interact with different Registered plugins.
-  It also encapsulates a controller to manager plugin registrations for different resources. 
-  Additionaly, it also helps to execute with different callbacks required for Plugin registration.
-- Plugin executor
-  It abstracts out complexities required to run a Pod for execution and provide reliable interfaces to interacts with 
-  Plugin manager interfaces. 
-  
-##### Workflow 
+### Backup workflow
 
-- Plugin Registration
 
-  ![PluginRegistration](resources/KahuDesign-PluginRegistration.jpg)
+### Restore workflow
+
+
+
+
+
 
 ### Use case View
 //Provide system context and typical use cases to determine the scope and boundaries for the module.
@@ -276,6 +299,11 @@ Development and Deployment Context
 #### Execution View
 //During the run time, any specific aspects to be considered...like logging to be done for the module etc..It is not functional logs, it is specific to the module maintenance; OR Runtime replication or any such requirements to be considered during the design
 #### Sequence Diagrams
+
+- Plugin Registration
+
+  ![PluginRegistration](resources/KahuDesign-PluginRegistration.jpg)
+
 //Provide the key control and data flow sequence diagrams here
 #### Design Alternatives and other notes
 //If you have any other ideas or alternate suggestions or notes which needs further analysis or later consideration, please add here
