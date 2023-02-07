@@ -185,47 +185,64 @@ package plugin
 
 import (
   "context"
-  
+  "sync"
+
   "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
   kahuapi "github.com/soda-cdm/kahu/apis/kahu/v1beta1"
 )
 
-type PluginStage string 
+type PluginStage string
 
 const (
-  PreBackup     PluginStage = "PRE_BACKUP"
-  PostBackup    PluginStage = "POST_BACKUP"
-  PreRestore    PluginStage = "PRE_RESTORE"
-  PostRestore   PluginStage = "POST_RESTORE"
+  PreBackup   PluginStage = "PRE_BACKUP"
+  PostBackup  PluginStage = "POST_BACKUP"
+  PreRestore  PluginStage = "PRE_RESTORE"
+  PostRestore PluginStage = "POST_RESTORE"
 )
 
+type registry struct {
+  sync.RWMutex
+  
+  plugins map[string]Plugin
+}
+
+type Registry interface {
+  GetPlugins(ctx context.Context) []Plugin
+  GetPlugin(ctx context.Context, name string) (Plugin, error)
+  GetPluginsByResource(ctx context.Context, stage PluginStage, resource unstructured.Unstructured) (Plugin, error)
+}
+
+type RegisterPlugin func(plugin Plugin) error 
+
 type Plugin interface {
+  GetName() string
   Run(ctx context.Context, stage PluginStage, resource unstructured.Unstructured) (wait chan struct{}, err error)
 }
 
-type PluginManager interface {
-  GetBackuplocations(ctx context.Context) []BackupResourceService
-  GetBackuplocation(ctx context.Context, backuplocation kahuapi.BackupLocation) BackupResourceService
-  GetVolumeService(ctx context.Context, volumeBackuplocation kahuapi.BackupLocation)
-  GetVolumeServices(ctx context.Context) []string
-  GetPlugins(ctx context.Context) []string
-  GetPlugin(ctx context.Context, name string) (Plugin, error)
-  GetPluginsByResource(ctx context.Context, resource unstructured.Unstructured) (Plugin, error)
+type Manager interface {
+  GetResourceStores(ctx context.Context) []ResourceStoreService
+  GetResourceStore(ctx context.Context, backuplocation kahuapi.BackupLocation) ResourceStoreService
+  GetVolumeDataProtectionService(ctx context.Context, volumeBackuplocation kahuapi.BackupLocation) VolumeDataProtectionService
+  GetVolumeDataProtectionServices(ctx context.Context) []VolumeDataProtectionService
+  GetRegistry() Registry
 }
 
-type BackupResourceService interface {
-	Upload(ctx context.Context, resource unstructured.Unstructured) error
-	Download(ctx context.Context, resource unstructured.Unstructured) error
-	ResourceExists(ctx context.Context, resource unstructured.Unstructured) (bool, error)
-	Delete(ctx context.Context, resource unstructured.Unstructured) error
+type ResourceStoreService interface {
+  Plugin
+  Upload(ctx context.Context, resource unstructured.Unstructured) error
+  Download(ctx context.Context, resource unstructured.Unstructured) error
+  ResourceExists(ctx context.Context, resource unstructured.Unstructured) (bool, error)
+  Delete(ctx context.Context, resource unstructured.Unstructured) error
 }
 
-type VolumeService interface {
-    Backup(ctx context.Context, resource []unstructured.Unstructured) (wait chan struct{}, err error)
-    Restore(ctx context.Context, resource []unstructured.Unstructured) (wait chan struct{}, err error)
+type VolumeDataProtectionService interface {
+  Plugin
+  Backup(ctx context.Context, resource []unstructured.Unstructured) (wait chan struct{}, err error)
+  DeleteBackup(ctx context.Context, resource []unstructured.Unstructured) (wait chan struct{}, err error)
+  Restore(ctx context.Context, resource []unstructured.Unstructured) (wait chan struct{}, err error)
 }
 
-type RegisterPlugin func(PluginStage, kahuapi.ResourceSpec, Plugin) error 
+type RegisterPlugin func(PluginStage, kahuapi.ResourceSpec, Plugin) error
 
 ```
 
@@ -235,15 +252,26 @@ type RegisterPlugin func(PluginStage, kahuapi.ResourceSpec, Plugin) error
 package executor
 
 import (
-  "context"
+  appv1 "k8s.io/api/apps/v1"
+  v1 "k8s.io/api/core/v1"
+  "sync"
 
-  "k8s.io/api/core/v1"
+  kahuapi "github.com/soda-cdm/kahu/apis/kahu/v1beta1"
 )
 
-type Executor interface {
-  Run(ctx context.Context, podTemplate v1.PodTemplateSpec) (wait chan struct{}, err error)
+// implements ResourceStoreService
+type ResourceStore struct {
+  BackupLocation *kahuapi.BackupLocation
+  wait           sync.WaitGroup
+  Deployment     *appv1.Deployment
 }
 
+// implements VolumeDataProtectionService
+type VolumeDataProtection struct {
+  BackupLocation *kahuapi.BackupLocation
+  wait           sync.WaitGroup
+  Pod            *v1.Pod
+}
 ```
 
 
