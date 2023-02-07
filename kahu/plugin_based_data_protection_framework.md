@@ -114,7 +114,7 @@ The submitted requests are further processed by Backup/restore services in core 
 
 ## Proposed Architecture
 
-![Propos Design](resources/KahuHighLevelDesign-PluginBasedDataProtection.jpg)
+![Propos Design](resources/PluginBasedDataProtection.jpg)
 
 ### High Level Module Architecture
 The proposed design enables the kahu framework to adopt Template design pattern in which resources are treated as 
@@ -150,8 +150,8 @@ Plugin framework is composed of two modules:
   
 - Plugin executor
   
-  It abstracts out complexities required to run a plugin as Pod/object for execution and provide reliable interfaces to 
-  interacts with Plugin manager interfaces.
+  It abstracts out complexities required to run a plugin as Pod for execution and provide reliable interfaces to 
+  interacts with Plugin.
   
 ### Impact Analysis
 - Upgrade 
@@ -164,9 +164,11 @@ With plugin approach, most of the external components required for data protecti
 
 ### Backup workflow
 
+![Backup workflow](resources/BackupWorkflow.jpg)
 
 ### Restore workflow
 
+![Restore workflow](resources/RestoreWorkflow.jpg)
 
 ### Use case View
 //Provide system context and typical use cases to determine the scope and boundaries for the module.
@@ -252,7 +254,7 @@ Details of [Plugin CRD](#plugin-crd) are available in [Data View](#data-view)
 
 #### End User Context
 //Analysis and design inputs for the end user of the module
-####Functional Context
+#### Functional Context
 //Based on the functional requirements, what are the design aspects to be considered. Give all the details and block diagrams etc..
 #### Non Functional Context
 //Based on the non functional requirements, what are the design aspects to be considered. Give all the details and block diagrams etc..
