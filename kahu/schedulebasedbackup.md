@@ -13,7 +13,7 @@ will be going to cover the Schedule Policy and Scheduled based backups related a
     • Define a CRD for Backup Schedule Policy
     • Define a CRD for Scheduled Backup
     • Support Schedule based backup operation
-    • Define a CRD for Restore Schedule
+    • Define a CRD for Restore the latest Scheduled Backup
     • Support Restore from the latest successful scheduled backup
     • Should not break the backward compatibility
 
@@ -50,7 +50,7 @@ The submitted requests are further processed by Backup/restore services in core 
 
 The proposed design enables the scheduled based backup and which does not change anything in the exsist kahu-core design but enhances kahu system to support schedule based backups. In future it can be enhanced to support different kinds of schedules such as adaptive scheduling which can be implemented based on other futures such as observability features such as  events etc.
 
-
+![CronTab](resources/crontab.png)
 
 The Schedule format and logic would be similar to the above crontab and see low level design/CRDs for more information.
 The CRDs are defined namespace scope and schedule service will be deployed in the same namespace which will be taken input from the user during the deployment as an optional parameter.
@@ -60,7 +60,7 @@ But on introducing the scheduled based backup users can create the new CRD (for 
 
 Similar to before, users have to create the Backup Location etc but with scheduled backup users have to create the Schedule Policy CRD instances by Schedule Policy CR(whose name is supposed to be provided in the new Scheduled based backup CRD) before creating the new BackupSchedule CRD instance using the BackupSchedule CR (BackupSchedule).
 
-So the Scheduled Based Backup will depend on the Kahu Core services to support the Backup & Restore CRDs etc. 
+So the Scheduled Based Backup will depend on the Kahu Core services to support the Backup & Restore CRDs etc but kahu service will not depend on the scheduled based backup service. 
 
 
 The Job Management & Schedule approaches can be achieved by
@@ -74,18 +74,18 @@ The pros and cons of both the approaches as below
 	Pros: Better reliability 
       
    Cons: 1) Tightly coupled with k8s Cron-job, so any changes in Cron-job of
-			 k8s may have impact on our code
-		2)Its Complex
-		3) for small task need to create an image which has to be used Cron-
-			Job & its mgmt also complex
-		4)Need to watch on CronJob
+			   k8s may have impact on our code
+		   2) Its Complex
+		   3) for small task need to create an image which has to be used Cron-
+			   Job & its mgmt also complex
+		   4) Need to watch on CronJob
 
 - OpenSource
 
-	Pros: 1)Full control with us
-		2)Easy to implement & Manage using open source
-		3)Easy to handle/change the required things as code base is small as
-			required to us. If required esy to enhance it
+	Pros: 1) Full control with us
+		   2) Easy to implement & Manage using open source
+		   3) Easy to handle/change the required things as code base is small as
+			   required to us. If required esy to enhance it
 
 	Cons: Little less reliable than Cron-Job
 
@@ -109,6 +109,29 @@ The Backup operation is not completed within the given scheduled time then we be
 #### Interface Model
 //What are the interfaces for the Modules needed and the view
 
+The open source (https://github.com/robfig/cron) already provided below interfaces for cron
+
+
+```golang
+
+   func New(opts ...Option) *Cron
+
+   func (c *Cron) AddFunc(spec string, cmd func()) (EntryID, error)
+
+   c := cron.New()
+	c.AddFunc("30 * * * *", func() { fmt.Println("Every hour on the half hour") })
+
+	c := cron.New(cron.WithChain(
+		cron.DelayIfStillRunning(logger),
+	))
+
+   c := cron.New(cron.WithChain(
+		cron.SkipIfStillRunning(logger),
+	))
+
+```
+
+The controller service related 
 
 #### External Interfaces
 //Provide the details of the interface, type, why ? any limitations or alternates etc…
@@ -150,8 +173,47 @@ Development and Deployment Context
 
 - The Schedule Policy related CRDs and more granular info as follows
 
+The specific interpretation of the format is based on the Cron Wikipedia page:
+https://en.wikipedia.org/wiki/Cron
+
+## Special Characters which are used in our cron logic
+
+-Asterisk ( * )
+
+The asterisk indicates that the cron expression will match for all values of the
+field; e.g., using an asterisk in the 5th field (month) would indicate every
+month.
+
+-Comma ( , )
+
+Commas are used to separate items of a list. For example, using "MON,WED,FRI" in
+the 5th field (day of week) would mean Mondays, Wednesdays and Fridays.
+
+-Question mark ( ? )
+
+Question mark may be used instead of '*' for leaving either day-of-month or
+day-of-week blank.
+
+A cron expression represents a set of times, using 5 space-separated fields.
+
+	Field name   | Mandatory? | Allowed values  | Allowed special characters
+	----------   | ---------- | --------------  | --------------------------
+	Minutes      | Yes        | 0-59            | * / , -     (NA)
+	Hours        | Yes        | 0-23            | * / , -     (NA)
+	Day of month | Yes        | 1-31            | * / , - ?   (?)
+	Month        | Yes        | 1-12 or JAN-DEC | * / , -     (*)
+	Day of week  | Yes        | 0-6 or SUN-SAT  | * / , - ?   (?)
+   
+for each policy the examples are given on structures defination
+
 ```golang
-var DaysType map[string]time.Weekday {
+package v1beta1
+
+import (	
+	"time"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+var DaysType = map[string]time.Weekday {
    "Sunday":   time.Sunday,
    "Sun" :     time.Sunday,
    "Monday":   time.Monday,
@@ -159,7 +221,7 @@ var DaysType map[string]time.Weekday {
    "Tuesday":  time.Tuesday,
    "Tue":      time.Tuesday,
    "Wednesday":time.Wednesday,
-   "Wed":     time.Wednesday,
+   "Wed":      time.Wednesday,
    "Thursday": time.Thursday,
    "Thurs":    time.Thursday,
    "Friday":   time.Friday,
@@ -173,7 +235,8 @@ const (
    WeeklyPolicyType  string =  "Weekly"
    MonthlyPolicyType string =  "Monthly"
 )
-// for every number of minutes the schedule will be triggered
+// for every number of minutes after every hour the schedule will be triggered
+// the cron example  25 * * * * (so every hour after 25 minutes triggers)
 type HourlyPolicy  struct {
    // Minutes when the policy should be triggered
    // +kubebuilder:validation:Maximum=59
@@ -182,11 +245,12 @@ type HourlyPolicy  struct {
    Minutes int     `json:"minutes"`
    // +kubebuilder:validation:Maximum=256
    // +kubebuilder:validation:Minimum=1
-   // +kubebuilder:default=25
+   // +kubebuilder:default=24
    // +kubebuilder:validation:Optional
    MaxCopies int   `json:"maxCopies"`
 }
 // Daily Policy contains the time in the day when the action should be triggered
+// the cron example  20 16 * * *  (so every day at 16:20 Hrs triggers)
 type DailyPolicy  struct {
    // Time when the policy should be triggered
    // time eg 12:15
@@ -199,6 +263,7 @@ type DailyPolicy  struct {
    MaxCopies int   `json:"maxCopies"`  
 }
 // Weekly Policy contains the days and time  in a week when the action should be triggered
+// the cron example  25 11 ? * (1,2) (so on Mon,Tues at 11:25 Hrs triggers)
 type WeeklyPolicy  struct {
    // Days of the week when the policy should be triggered.
    // Expected format is  specified in  DaysType as above
@@ -208,11 +273,13 @@ type WeeklyPolicy  struct {
    Time  string `json:"time"`
    // +kubebuilder:validation:Maximum=256
    // +kubebuilder:validation:Minimum=1
-   // +kubebuilder:default=5
+   // +kubebuilder:default=4
    // +kubebuilder:validation:Optional
    MaxCopies int       `json:"maxCopies"` 
 }
 // Monthly Policy contains the dates and time  in a month when the action should be triggered
+// the cron example  25 11 (1,5,8,11,18) * ? 
+// (so on given dates every month at 11:25 Hrs triggers)
 type MonthlyPolicy  struct {
 // Dates of the month when action should be triggered. If given date does not exist in a month then rollover to the next
 // date of month. Example 31 is specified then in Feb it will trigger on either 1st or 2nd March based on leap year or not.
@@ -223,22 +290,28 @@ type MonthlyPolicy  struct {
    Time  string `json:"time"`
    // +kubebuilder:validation:Maximum=256
    // +kubebuilder:validation:Minimum=1
-   // +kubebuilder:default=5
+   // +kubebuilder:default=12
    // +kubebuilder:validation:Optional
    MaxCopies int    `json:"maxCopies"`
 }
+// SchedulePolicyspec
 type SchedulePolicySpec  struct {
    Hourly  *HourlyPolicy       `json:"hourly,omitempty"`
    Daily   *DailyPolicy        `json:"daily,omitempty"`
    Weekly  *WeeklyPolicy       `json:"weekly,omitempty"`
    Monthly *MonthlyPolicy      `json:"monthly,omitempty"` 
 }
+// SchedulePolicy is the Schema for the policy API
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 type SchedulePolicy struct {
    metav1.TypeMeta `json:",inline"`  
    metav1.ObjectMeta `json:"metadata,omitempty"`
    Spec  SchedulePolicySpec `json:"spec,omitempty"`  
 }
 // SchedulePolicyList contains a List of SchedulePolicy
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type SchedulePolicyList struct {
    metav1.TypeMeta `json:",inline"`
    metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -250,6 +323,25 @@ type SchedulePolicyList struct {
 - The BackupSchedule related CRDs and more granular info as follows
 
 ```golang
+
+// ConcurrencyPolicy describes how the BackupSchedule will be handled.
+// Only one of the following concurrent policies may be specified.
+// If none of the following policies is specified, the default one
+// is ForbidConcurrent.
+type ConcurrencyPolicy string
+
+const (
+	// AllowConcurrent allows Backup to run concurrently.
+	AllowConcurrent ConcurrencyPolicy = "Allow"
+
+	// ForbidConcurrent forbids concurrent runs, skipping next run if previous
+	// hasn't finished yet.
+	ForbidConcurrent ConcurrencyPolicy = "Forbid"
+
+	// ReplaceConcurrent cancels currently running Backup and replaces it with a new one.
+	ReplaceConcurrent ConcurrencyPolicy = "Replace"
+)
+
 type BackupScheduleSpec  struct {  
    // optional, name of the SchedulePolicy CR
    // if empty considered as manual trigger otherwise scheduled based backup will be taken
@@ -297,8 +389,8 @@ const(
 type StatusInfo struct {
     BackupName string     `json:"backupName"`
     ExecStatus ExecutionStatus   `json:"execStatus"`
-    StartTimestamp metav1.Time `json:"lastStartTimestamp"`
-    CompletionTimestamp metav1.Time `json:"lastCompletionTimestamp"`
+    StartTimestamp metav1.Time `json:"startTimestamp"`
+    CompletionTimestamp metav1.Time `json:"completionTimestamp"`
 }
 type BackupScheduleStatus struct {
    // latest 10 scheduled backup status is stored
@@ -313,6 +405,10 @@ type BackupScheduleStatus struct {
    // the created backup crd status used to identify the completed or not
    BackupStatus BackupState `json:"backupStatus"`
 }
+// +genclient
+// +kubebuilder:subresource:status
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
 type BackupSchedule struct {
    metav1.TypeMeta `json:",inline"`
    metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -320,6 +416,7 @@ type BackupSchedule struct {
    Status BackupScheduleStatus `json:"status,omitempty"`
 }
 // BackupScheduleList contains a List of BackupSchedule
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 type BackupScheduleList struct {
    metav1.TypeMeta `json:",inline"`
    metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -327,6 +424,57 @@ type BackupScheduleList struct {
 }
 
 ```
+
+
+
+Restore from the latest scheduled backup related CRDs are as follows but  i feel
+We better just add the BackupScheduleName in the current Restore CRD so that its 
+Very simple to handle this feature on implementing the client which will take care 
+Of validations etc but with this approach kahu will depends on the Management layer    
+Created object instances otherwise we may need to implement the web-hook for this 
+CRD so that validation are taken care.
+
+```golang
+
+type RestoreScheduleStatus struct {
+   BackupName string `json:"backupName"`
+   ExecutionStatus ExecutionStatus `json:"executionStatus"`
+   StartTimestamp metav1.Time `json:"startTimestamp"`
+   CompletionTimestamp metav1.Time `json:"completionTimestamp"`
+   // the created restore crd status
+   // +optional
+   State RestoreState `json:"state,omitempty"`
+   // ValidationErrors is a slice of validation errors during restore
+   ValidationErrors []string `json:"validationErrors,omitempty"`
+}
+
+// +genclient
+// +kubebuilder:subresource:status
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:printcolumn:name="Age",type=date,JSONPath=`.metadata.creationTimestamp`
+type RestoreScheduleSpec struct {
+   // BackupScheduleName is BackupSchedule CR Name   
+	// +required
+   BackupScheduleName string `json:"backupScheduleName"`
+   RestoreTemplate RestoreSpec `json:"restoreTemplate,omitempty"`
+}
+
+type RestoreFromSchedule struct {
+   metav1.TypeMeta `json:",inline"`
+   metav1.ObjectMeta `json:"metadata,omitempty"`
+   Spec  RestoreScheduleSpec `json:"spec,omitempty"`
+   Status RestoreScheduleStatus `json:"status,omitempty"`
+}
+
+// RestoreFromScheduleList contains a List of RestoreFromSchedule
+type RestoreFromScheduleList struct {
+   metav1.TypeMeta `json:",inline"`
+   metav1.ObjectMeta `json:"metadata,omitempty"`
+   Items []RestoreFromSchedule `json:"items"`
+}
+
+```
+any how this requirement we can give less priority as user can get the latest backup name of the Backupschedule using the kubectl and use that name in the exsist restore CRD to get the same functionality.
 
 #### Code
 //Provide inputs for code structure, language, any open source code can be reused, coding methods, development env etc
@@ -350,10 +498,242 @@ type BackupScheduleList struct {
 
 #### Design Alternatives and other notes
 //If you have any other ideas or alternate suggestions or notes which needs further analysis or later consideration, please add here
+
+Especially the Restore from latest  backup which was triggered based on the schedule has two options 
+1) Just add the BackupScheduleName in the present Restore CRD and handle accordingly
+2) add a separate CRD for RestoreSchedule as provided above and handle accordingly.
+option-1 which is simple and more user friendly but the kahu-core backup service will have  dependency with the data protection management (as BackupSchedule object is created by the data protection management module) which is not good. Option-2 would need more time but it's more easy for future managements or enhancements.
+
+
 #### Open Issues
 //All the open issues go here. Please track it else where to closure
 #### Design Requirements / Tasks
 //List of detailed tasks for this module go here. Based on all the design and analysis, please list all the tasks to be completed for the implementation and release of the module. If you are updating the overall task list or location, please provide the links or ids here...This is to get an overall consolidation of task items for this module
 
+### Schedule Service (Custom k8s-controller +)
+- Sample Controller service
 
+Similar to the present logic of kahu, we can define the controller manager & backup schedule service(controller) which will watch for the BackupSchedule , SchedulePolicy & Backup CRDs.
+
+so that in future we can add other schedules like event based scheduler or adaptive scheduling based on the cluster telemetry data , production storage providers stats and backup storage providers stats etc
+
+
+In our Schedule service the major things are 
+ * we should be watching on the BackupSchedule CRD and creating the Backup CRD based on the schedule policy
+
+ * we should have reconcile logic for the Backup CRD ,once the backup is completed update the 
+   status in the Schedule Backup properly
+
+ * we should handle schedulebackup add,update,delete & syncronzation etc
+
+ 
+![ScheduleService](resources/sample_controller.jpeg)
+
+```golang
+
+import (
+	"context"
+	"fmt"
+	log "github.com/sirupsen/logrus"
+   "github.com/soda-cdm/kahu/client/informers/externalversions"
+   runtimeclient "sigs.k8s.io/controller-runtime/pkg/client"
+   "github.com/soda-cdm/kahu/controllers/app/config"
+   "sigs.k8s.io/controller-runtime/pkg/manager"
+   "k8s.io/client-go/rest"
+   "k8s.io/client-go/tools/record"
+   "k8s.io/client-go/tools/cache"
+   "k8s.io/client-go/utils/workqueue"
+)
+
+type ControllerManager struct {
+	ctx                      context.Context
+	runtimeClient            runtimeclient.Client
+	restConfig               *rest.Config
+	controllerRuntimeManager manager.Manager
+	completeConfig           *config.CompletedConfig
+	informerFactory          externalversions.SharedInformerFactory	
+	EventBroadcaster         record.EventBroadcaster
+	// etc ...
+}
+
+
+type CronJobInfo struct {
+    object  *cron.Cron
+    entryId  cron.EntryID
+    Expression string
+}
+
+// Controller is the controller implementation for Schedule Service resources
+type Controller struct {
+	// kubeclientset is a standard kubernetes clientset
+	kubeclientset kubernetes.Interface
+
+   // add other clients like kahu client to create the backup crd etc
+
+   // 
+	
+	// RateLimitingInterface is an interface that rate limits items being added to the queue.
+	backupSchedulerQueue workqueue.RateLimitingInterface
+   backupPolicyQueue    workqueue.RateLimitingInterface
+   backupQueue          workqueue.RateLimitingInterface
+
+   // InformerSynced is a function that can be used to determine if an informer has synced. This is useful for determining if caches have synced.
+   backupSchedulerInformersynced        cache.InformerSynced
+   backupPolicyInformerSynced           cache.InformerSynced
+   backupInformerSynced                 cache.InformerSynced
+
+   // add other listers as below on genereting the code
+   // backupSchedulerLister  
+   // backupPolicyLister
+   // backupListers     
+
+   reSyncPeriod time.Duration
+
+	// EventRecorder knows how to record events on behalf of an EventSource.
+	recorder record.EventRecorder
+
+   // the backup schdule info key as BackupSchedule.UID
+   cronJobInfo map[string]CronJobInfo
+}
+
+```
+
+### webHook
+
+- Sample webhook
+
+Admission webhooks are HTTP callbacks that receive admission requests and do something with them. You can define two types of admission webhooks, validating admission webhook and mutating admission webhook. Mutating admission webhooks are invoked first, and can modify objects sent to the API server to enforce custom defaults. After all object modifications are complete, and after the incoming object is validated by the API server, validating admission webhooks are invoked and can reject requests to enforce custom policies.
+
+In our case we should have validation webhook for the schedule policy. The other approach is
+we can write the client which will take care of the validations instead of the web-hook , so app admin can  use that client to create the ScheduleBackup ,Restore etc. 
+
+![Webhook](resources/admission-controller-phases.png)
+
+sample validations of the scheduler policy as below
+
+```golang
+
+import (
+	"context"
+	"fmt"
+   "time"
+	log "github.com/sirupsen/logrus"
+)
+
+const (
+	layoutTime               = "15:09"
+)
+
+func checkTimeFormat(policyTime string) error {
+	_, err := time.Parse(layoutTime, policyTime)
+	if err != nil {
+		return fmt.Errorf("policyTime is: %s, err format :%v, you should provide the time"+
+			" in the 0:00-23-59 format", policyTime, err)
+	}
+	return nil
+}
+
+func (d *DailyPolicy) CheckTimeFormat() error {
+	return checkTimeFormat(d.Time)
+}
+
+// validates the DailyPolicy
+func (d *DailyPolicy) Validate() error {
+	err := d.CheckTimeFormat()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+unc (w *WeeklyPolicy) CheckTimeFormat() error {
+	return checkTimeFormat(w.Time)
+}
+
+// validates the WeeklyPolicy
+func (w *WeeklyPolicy) Validate() error {
+	err := w.CheckTimeFormat()
+	if err != nil {
+		return err
+	}
+	var record1 []string
+	var record2 []string
+	strMap := make(map[time.Weekday]string)
+
+	for _, day := range w.Days {
+		// invalid format checking
+		if _, exist1 := DaysType[day]; !exist1 {
+			record1 = append(record1, day)
+		}
+		// duplicate checking
+		if _, exists := strMap[DaysType[day]]; exists {
+			record2 = append(record2, day)
+		} else {
+			strMap[DaysType[day]] = day
+		}
+	}
+
+	if len(record1) > 0 {
+		return fmt.Errorf("invalid day of the week: %v, in WeeklyPolicy you should provide the day"+
+			" as Sunday, Sun, Monday, Mon, TuesDay, Tue, Wednesday, Wed, Thursday, Thurs, Friday, Fri,"+
+			"Saturday, Sat", record1)
+	}
+	if len(record2) > 0 {
+		return fmt.Errorf("Duplictae day of the week: %v, in WeeklyPolicy ", record2)
+	}
+	return nil
+}
+
+func (m *MonthlyPolicy) CheckTimeFormat() error {
+	return checkTimeFormat(m.Time)
+}
+
+// validates the MonthlyPolicy
+func (m *MonthlyPolicy) Validate() error {
+	err := m.CheckTimeFormat()
+	if err != nil {
+		return err
+	}
+	var record []int
+	for _, date := range m.Dates {
+		// invalid format checking
+		if date <= 0 || date > 31 {
+			record = append(record, date)
+		}
+	}
+
+	if len(record) > 0 {
+		return fmt.Errorf("invalid date of the Month: %v, in MonthlyPolicy you should provide the date"+
+			" as (0,31] only", record)
+	}
+	intMap := make(map[int]int)
+	// validate for duplicate values
+	for _, v := range m.Dates {
+		// duplicate checking
+		if _, exists := intMap[v]; exists {
+			record = append(record, v)
+		} else {
+			intMap[v] = v
+		}
+	}
+
+	if len(record) > 0 {
+		return fmt.Errorf("duplicate date of the Month: %v, in MonthlyPolicy you should provide the date"+
+			" as (0,31] only", record)
+	}
+	return nil
+}
+```
+
+References
+
+https://github.com/kubernetes/kubernetes
+
+https://github.com/slackhq/simple-kubernetes-webhook
+
+https://github.com/kubernetes/sample-controller
+
+https://github.com/soda-cdm/kahu
+
+https://docs.bitnami.com/tutorials/a-deep-dive-into-kubernetes-controllers
 
