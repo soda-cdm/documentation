@@ -70,8 +70,8 @@ Key components of the ecosystem are as follows
 #### External Components:
 **Clients**: These are different northbound clients which access KAHU features through its APIS
 
-**3rd Part O&M Layer**: These are the systems which possess their own O&M features and
- internally uses KAHU for backup/restore usecases
+**3rd Party O&M Layer**: These are the systems which possess their own O&M features and
+ internally use KAHU for backup/restore usecases
 
 **3rd Party Providers:** These are the systems which integrates with KAHU and helps to realise
  backup/restore features with storage backends.
