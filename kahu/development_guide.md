@@ -35,7 +35,7 @@ In case of changes needed to any of these interfaces, respective proto file need
  make generated_files
 ```
 
-4. For any modification to other part of the code, execute below command to  build the binaries and generate the docker images.
+4. For any modification to other part of the code, execute below commands to  build the binaries and generate the docker images.
 ```shell
  make release-images
 ```
